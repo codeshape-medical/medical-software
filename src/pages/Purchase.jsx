@@ -350,11 +350,14 @@ export default function Purchase() {
       nextErrors.supplierName = 'Supplier name is required.'
     }
 
-    if (!supplierPhone.trim()) {
-      nextErrors.supplierPhone = 'Supplier phone number is required.'
-    } else if (supplierPhone.replace(/\D/g, '').length < 10) {
-      nextErrors.supplierPhone = 'Enter a valid 10-digit phone number.'
-    }
+   const phone = supplierPhone.replace(/\D/g, '')
+
+if (!phone) {
+  nextErrors.supplierPhone = 'Supplier phone number is required.'
+} else if (!/^[6-9]\d{9}$/.test(phone)) {
+  nextErrors.supplierPhone =
+    'Enter a valid 10-digit Indian mobile number.'
+}
 
     if (!supplierAddress.trim()) {
       nextErrors.supplierAddress = 'Supplier address is required.'
@@ -737,18 +740,45 @@ export default function Purchase() {
                     />
 
                     <input
-                      required
-                      className={`${inputClass} pl-9`}
-                      placeholder="Enter phone number"
-                      value={supplierPhone}
-                      onChange={(event) => {
-                        setSupplierPhone(event.target.value)
-                        setValidationErrors((previous) => ({
-                          ...previous,
-                          supplierPhone: '',
-                        }))
-                      }}
-                    />
+  required
+  type="tel"
+  inputMode="numeric"
+  maxLength={10}
+  className={`${inputClass} pl-9 ${
+    validationErrors.supplierPhone
+      ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10'
+      : ''
+  }`}
+  placeholder="Enter 10-digit phone number"
+  value={supplierPhone}
+  onChange={(event) => {
+    const value = event.target.value
+      .replace(/\D/g, '')
+      .slice(0, 10)
+
+    setSupplierPhone(value)
+
+    const nextErrors = {
+      ...validationErrors,
+      supplierPhone: '',
+    }
+
+    if (value.length > 0 && !/^[6-9]/.test(value)) {
+      nextErrors.supplierPhone =
+        'Mobile number must start with 6, 7, 8 or 9.'
+    } else if (value.length > 0 && value.length < 10) {
+      nextErrors.supplierPhone =
+        `Enter ${10 - value.length} more digit${
+          10 - value.length === 1 ? '' : 's'
+        }.`
+    } else if (value.length === 10 && !/^[6-9]\d{9}$/.test(value)) {
+      nextErrors.supplierPhone =
+        'Enter a valid 10-digit Indian mobile number.'
+    }
+
+    setValidationErrors(nextErrors)
+  }}
+/>
                   </div>
                   {validationErrors.supplierPhone && (
                     <p className="mt-1 text-[10px] font-semibold text-red-500">

@@ -15,7 +15,7 @@ const CATEGORIES = [
   'Cardiac',
 ]
 
-const TABS = ['Expiring Soon', 'Expired Items', 'Expiry Report']
+const TABS = ['Expiring Soon', 'Expired Items']
 
 function statusTone(status) {
   if (status === 'Expired') {

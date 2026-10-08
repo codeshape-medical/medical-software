@@ -149,7 +149,7 @@ export default function Sidebar({ open, onClose }) {
 </div>
             {/* Hospital Name */}
             <p className="text-[14px] font-bold text-white tracking-wide whitespace-nowrap">
-              City Care Hospital
+              Narayan Hospital
             </p>
 
           </button>

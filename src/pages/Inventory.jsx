@@ -663,12 +663,19 @@ export default function Inventory() {
                 ).toFixed(2)}`}
               />
 
-              <Detail
-                label="MRP"
-                value={`₹${Number(
-                  selected.mrp || 0
-                ).toFixed(2)}`}
-              />
+             <Detail
+  label="Sales Rate"
+  value={`₹${Number(
+    selected.salePrice || 0
+  ).toFixed(2)}`}
+/>
+
+<Detail
+  label="MRP"
+  value={`₹${Number(
+    selected.mrp || 0
+  ).toFixed(2)}`}
+/>
 
             </div>
 
