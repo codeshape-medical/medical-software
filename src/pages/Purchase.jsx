@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
   CalendarDays,
-  Filter,
   Phone,
   MapPin,
   PackagePlus,
@@ -76,14 +75,12 @@ export default function Purchase() {
   const [search, setSearch] = useState('')
   const [items, setItems] = useState([])
 
-  const [showFilter, setShowFilter] = useState(false)
-  const [filterMode, setFilterMode] = useState('all')
-
   const [showNewMedicine, setShowNewMedicine] = useState(false)
   const [newMedicine, setNewMedicine] = useState(emptyNewMedicine)
 
   const [saving, setSaving] = useState(false)
   const [supplierMatched, setSupplierMatched] = useState(false)
+  const [validationErrors, setValidationErrors] = useState({})
 
   const searchRef = useRef(null)
 
@@ -183,15 +180,6 @@ export default function Purchase() {
             .toLowerCase()
             .includes(search.toLowerCase())
         )
-        .filter((product) => {
-          if (filterMode === 'added') {
-            return !items.some(
-              (item) => item.productId === product.id
-            )
-          }
-
-          return true
-        })
         .slice(0, 8)
     : []
 
@@ -227,7 +215,6 @@ export default function Purchase() {
     ])
 
     setSearch('')
-    setShowFilter(false)
   }
 
   /* =========================================================
@@ -253,6 +240,11 @@ export default function Purchase() {
 
     if (!qty || qty < 1) {
       alert('Enter a valid quantity.')
+      return
+    }
+
+    if (!newMedicine.expiry) {
+      alert('Enter expiry date.')
       return
     }
 
@@ -344,6 +336,58 @@ export default function Purchase() {
     setShowNewMedicine(false)
     setNewMedicine(emptyNewMedicine)
     setSupplierTransactions([])
+    setValidationErrors({})
+  }
+
+  /* =========================================================
+     VALIDATION
+  ========================================================= */
+
+  function validatePurchase() {
+    const nextErrors = {}
+
+    if (!supplierName.trim()) {
+      nextErrors.supplierName = 'Supplier name is required.'
+    }
+
+    if (!supplierPhone.trim()) {
+      nextErrors.supplierPhone = 'Supplier phone number is required.'
+    } else if (supplierPhone.replace(/\D/g, '').length < 10) {
+      nextErrors.supplierPhone = 'Enter a valid 10-digit phone number.'
+    }
+
+    if (!supplierAddress.trim()) {
+      nextErrors.supplierAddress = 'Supplier address is required.'
+    }
+
+    if (!invoiceDate) {
+      nextErrors.invoiceDate = 'Purchase date is required.'
+    }
+
+    if (!items.length) {
+      nextErrors.items = 'Add at least one medicine to the purchase.'
+    }
+
+    items.forEach((item, index) => {
+      if (!item.name?.trim()) {
+        nextErrors[`item_${index}_name`] = 'Medicine name is required.'
+      }
+
+      if (!item.expiry) {
+        nextErrors[`item_${index}_expiry`] = 'Expiry date is required.'
+      }
+
+      if (!Number(item.qty) || Number(item.qty) < 1) {
+        nextErrors[`item_${index}_qty`] = 'Quantity must be at least 1.'
+      }
+
+      if (item.rate === '' || Number(item.rate) < 0) {
+        nextErrors[`item_${index}_rate`] = 'Purchase rate is required.'
+      }
+    })
+
+    setValidationErrors(nextErrors)
+    return Object.keys(nextErrors).length === 0
   }
 
   /* =========================================================
@@ -351,43 +395,9 @@ export default function Purchase() {
   ========================================================= */
 
   async function handleSave() {
-    if (!supplierName.trim()) {
-      alert('Enter supplier name.')
+    if (!validatePurchase()) {
       return
     }
-
-    if (!supplierPhone.trim()) {
-      alert('Enter supplier phone number.')
-      return
-    }
-
-    if (!supplierAddress.trim()) {
-      alert('Enter supplier address.')
-      return
-    }
-
-    if (!items.length) {
-      alert('Add at least one medicine to the purchase.')
-      return
-    }
-
-    for (const item of items) {
-      if (!item.name?.trim()) {
-        alert('Every purchase item must have a medicine name.')
-        return
-      }
-
-      if (Number(item.qty || 0) < 1) {
-        alert(`Enter a valid quantity for ${item.name}.`)
-        return
-      }
-
-      if (Number(item.rate || 0) < 0) {
-        alert(`Enter a valid purchase rate for ${item.name}.`)
-        return
-      }
-    }
-
     setSaving(true)
 
     try {
@@ -545,9 +555,7 @@ export default function Purchase() {
                 className="text-[#1689E8]"
               />
 
-              <span className="text-xs font-bold text-[#45617F]">
-                Invoice generated automatically
-              </span>
+              
             </div>
           </div>
         </div>
@@ -674,6 +682,7 @@ export default function Purchase() {
                   </label>
 
                   <input
+                    required
                     list="supplier-list"
                     className={inputClass}
                     placeholder="Enter supplier name"
@@ -684,6 +693,12 @@ export default function Purchase() {
                       )
                     }
                   />
+
+                  {validationErrors.supplierName && (
+                    <p className="mt-1 text-[10px] font-semibold text-red-500">
+                      {validationErrors.supplierName}
+                    </p>
+                  )}
 
                   <datalist id="supplier-list">
                     {suppliers.map((supplier) => (
@@ -722,16 +737,24 @@ export default function Purchase() {
                     />
 
                     <input
+                      required
                       className={`${inputClass} pl-9`}
                       placeholder="Enter phone number"
                       value={supplierPhone}
-                      onChange={(event) =>
-                        setSupplierPhone(
-                          event.target.value
-                        )
-                      }
+                      onChange={(event) => {
+                        setSupplierPhone(event.target.value)
+                        setValidationErrors((previous) => ({
+                          ...previous,
+                          supplierPhone: '',
+                        }))
+                      }}
                     />
                   </div>
+                  {validationErrors.supplierPhone && (
+                    <p className="mt-1 text-[10px] font-semibold text-red-500">
+                      {validationErrors.supplierPhone}
+                    </p>
+                  )}
                 </div>
 
                 {/* Invoice */}
@@ -795,6 +818,7 @@ export default function Purchase() {
                     />
 
                     <textarea
+                      required
                       rows={2}
                       className="
                         w-full
@@ -816,13 +840,20 @@ export default function Purchase() {
                       "
                       placeholder="Enter supplier address"
                       value={supplierAddress}
-                      onChange={(event) =>
-                        setSupplierAddress(
-                          event.target.value
-                        )
-                      }
+                      onChange={(event) => {
+                        setSupplierAddress(event.target.value)
+                        setValidationErrors((previous) => ({
+                          ...previous,
+                          supplierAddress: '',
+                        }))
+                      }}
                     />
                   </div>
+                  {validationErrors.supplierAddress && (
+                    <p className="mt-1 text-[10px] font-semibold text-red-500">
+                      {validationErrors.supplierAddress}
+                    </p>
+                  )}
                 </div>
 
                 {/* Date */}
@@ -840,6 +871,7 @@ export default function Purchase() {
 
                   <div className="relative">
                     <input
+                      required
                       type="date"
                       className={`${inputClass} pr-9`}
                       value={invoiceDate}
@@ -849,6 +881,12 @@ export default function Purchase() {
                         )
                       }
                     />
+
+                    {validationErrors.invoiceDate && (
+                      <p className="mt-1 text-[10px] font-semibold text-red-500">
+                        {validationErrors.invoiceDate}
+                      </p>
+                    )}
 
                     <CalendarDays
                       size={16}
@@ -1053,31 +1091,6 @@ export default function Purchase() {
 
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    searchRef.current?.focus()
-                  }}
-                  className="
-                    h-10
-                    px-5
-                    rounded-full
-                    border
-                    border-[#B8DAFA]
-                    bg-white
-                    text-[#1689E8]
-                    font-semibold
-                    text-sm
-                    flex
-                    items-center
-                    justify-center
-                    gap-2
-                  "
-                >
-                  <Filter size={15} />
-                  Filter
-                </button>
-
               </div>
 
               {/* =================================================
@@ -1122,9 +1135,14 @@ export default function Purchase() {
                     gap-3
                   ">
 
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#45617F] mb-1">
+                        Medicine Name <span className="text-red-500">*</span>
+                      </label>
                     <input
+                      required
                       className={inputClass}
-                      placeholder="Medicine name *"
+                      placeholder="Enter medicine name"
                       value={newMedicine.name}
                       onChange={(event) =>
                         updateNewMedicine(
@@ -1134,9 +1152,12 @@ export default function Purchase() {
                       }
                     />
 
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#45617F] mb-1">Brand</label>
                     <input
                       className={inputClass}
-                      placeholder="Brand"
+                      placeholder="Enter brand"
                       value={newMedicine.brand}
                       onChange={(event) =>
                         updateNewMedicine(
@@ -1146,9 +1167,12 @@ export default function Purchase() {
                       }
                     />
 
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#45617F] mb-1">Category</label>
                     <input
                       className={inputClass}
-                      placeholder="Category"
+                      placeholder="Enter category"
                       value={newMedicine.category}
                       onChange={(event) =>
                         updateNewMedicine(
@@ -1158,9 +1182,12 @@ export default function Purchase() {
                       }
                     />
 
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#45617F] mb-1">Batch Number</label>
                     <input
                       className={inputClass}
-                      placeholder="Batch number"
+                      placeholder="Enter batch number"
                       value={newMedicine.batchNo}
                       onChange={(event) =>
                         updateNewMedicine(
@@ -1170,7 +1197,13 @@ export default function Purchase() {
                       }
                     />
 
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#45617F] mb-1">
+                        Expiry Date <span className="text-red-500">*</span>
+                      </label>
                     <input
+                      required
                       type="date"
                       className={inputClass}
                       value={newMedicine.expiry}
@@ -1182,11 +1215,17 @@ export default function Purchase() {
                       }
                     />
 
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#45617F] mb-1">
+                        Quantity <span className="text-red-500">*</span>
+                      </label>
                     <input
+                      required
                       type="number"
                       min="1"
                       className={inputClass}
-                      placeholder="Quantity *"
+                      placeholder="Enter quantity"
                       value={newMedicine.qty}
                       onChange={(event) =>
                         updateNewMedicine(
@@ -1196,12 +1235,18 @@ export default function Purchase() {
                       }
                     />
 
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#45617F] mb-1">
+                        Purchase Rate <span className="text-red-500">*</span>
+                      </label>
                     <input
+                      required
                       type="number"
                       min="0"
                       step="0.01"
                       className={inputClass}
-                      placeholder="Purchase rate *"
+                      placeholder="Enter purchase rate"
                       value={newMedicine.rate}
                       onChange={(event) =>
                         updateNewMedicine(
@@ -1211,12 +1256,15 @@ export default function Purchase() {
                       }
                     />
 
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#45617F] mb-1">Sale Price</label>
                     <input
                       type="number"
                       min="0"
                       step="0.01"
                       className={inputClass}
-                      placeholder="Sale price"
+                      placeholder="Enter sale price"
                       value={newMedicine.salePrice}
                       onChange={(event) =>
                         updateNewMedicine(
@@ -1226,12 +1274,15 @@ export default function Purchase() {
                       }
                     />
 
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#45617F] mb-1">MRP</label>
                     <input
                       type="number"
                       min="0"
                       step="0.01"
                       className={inputClass}
-                      placeholder="MRP"
+                      placeholder="Enter MRP"
                       value={newMedicine.mrp}
                       onChange={(event) =>
                         updateNewMedicine(
@@ -1241,6 +1292,7 @@ export default function Purchase() {
                       }
                     />
 
+                    </div>
                   </div>
 
                   <div className="
@@ -1407,7 +1459,9 @@ export default function Purchase() {
                         </td>
 
                         <td className="px-3 py-2.5">
+                          <div>
                           <input
+                            required
                             type="date"
                             className="
                               h-9
@@ -1424,17 +1478,21 @@ export default function Purchase() {
                             "
                             value={item.expiry || ''}
                             onChange={(event) =>
-                              updateItem(
-                                index,
-                                'expiry',
-                                event.target.value
-                              )
+                              updateItem(index, 'expiry', event.target.value)
                             }
                           />
+                          {validationErrors[`item_${index}_expiry`] && (
+                            <p className="mt-1 text-[9px] font-semibold text-red-500">
+                              Required
+                            </p>
+                          )}
+                          </div>
                         </td>
 
                         <td className="px-3 py-2.5">
+                          <div>
                           <input
+                            required
                             type="number"
                             min="1"
                             className="
@@ -1452,17 +1510,21 @@ export default function Purchase() {
                             "
                             value={item.qty}
                             onChange={(event) =>
-                              updateItem(
-                                index,
-                                'qty',
-                                event.target.value
-                              )
+                              updateItem(index, 'qty', event.target.value)
                             }
                           />
+                          {validationErrors[`item_${index}_qty`] && (
+                            <p className="mt-1 text-[9px] font-semibold text-red-500">
+                              Required
+                            </p>
+                          )}
+                          </div>
                         </td>
 
                         <td className="px-3 py-2.5">
+                          <div>
                           <input
+                            required
                             type="number"
                             min="0"
                             step="0.01"
@@ -1481,13 +1543,15 @@ export default function Purchase() {
                             "
                             value={item.rate}
                             onChange={(event) =>
-                              updateItem(
-                                index,
-                                'rate',
-                                event.target.value
-                              )
+                              updateItem(index, 'rate', event.target.value)
                             }
                           />
+                          {validationErrors[`item_${index}_rate`] && (
+                            <p className="mt-1 text-[9px] font-semibold text-red-500">
+                              Required
+                            </p>
+                          )}
+                          </div>
                         </td>
 
                         <td className="
@@ -1551,6 +1615,11 @@ export default function Purchase() {
                           "
                         >
                           Search and add medicines to this purchase.
+                          {validationErrors.items && (
+                            <p className="mt-1 text-[10px] font-semibold text-red-500">
+                              {validationErrors.items}
+                            </p>
+                          )}
                         </td>
                       </tr>
                     )}
@@ -1781,6 +1850,8 @@ export default function Purchase() {
                               ">
                                 {transaction.itemCount ??
                                   transaction.itemsCount ??
+                                  transaction.items?.length ??
+                                  transaction.item_quantity_count ??
                                   '-'}
                               </td>
 

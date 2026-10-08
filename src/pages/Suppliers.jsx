@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+
 import {
   Plus,
   Search,
@@ -7,6 +8,7 @@ import {
   Building2,
   MapPin,
 } from 'lucide-react'
+
 import { getSuppliers, addSupplier } from '../services/api'
 
 const emptyForm = {
@@ -20,13 +22,21 @@ export default function Suppliers() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  const [phoneError, setPhoneError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     load()
   }, [])
 
-  function load() {
-    getSuppliers().then(setSuppliers)
+  async function load() {
+    try {
+      const data = await getSuppliers()
+      setSuppliers(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Failed to load suppliers:', error)
+      setSuppliers([])
+    }
   }
 
   const filtered = suppliers.filter((s) =>
@@ -35,20 +45,91 @@ export default function Suppliers() {
       .includes(search.toLowerCase())
   )
 
+  function handlePhoneChange(value) {
+    // Only allow digits
+    const digits = value.replace(/\D/g, '').slice(0, 10)
+
+    setForm({
+      ...form,
+      contact: digits,
+    })
+
+    if (!digits) {
+      setPhoneError('Phone number is required.')
+    } else if (digits.length !== 10) {
+      setPhoneError('Phone number must be exactly 10 digits.')
+    } else {
+      setPhoneError('')
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
 
-    await addSupplier(form)
+    const supplierName = form.name.trim()
+    const phone = form.contact.trim()
+    const address = form.address.trim()
 
-    setForm(emptyForm)
+    if (!supplierName) {
+      alert('Supplier name is required.')
+      return
+    }
+
+    if (!phone) {
+      setPhoneError('Phone number is required.')
+      return
+    }
+
+    if (!/^\d{10}$/.test(phone)) {
+      setPhoneError('Phone number must be exactly 10 digits.')
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      // This saves the supplier in the database
+      // through the existing POST /suppliers API.
+      await addSupplier({
+        name: supplierName,
+        contact: phone,
+        address,
+      })
+
+      alert('Supplier added successfully.')
+
+      setForm(emptyForm)
+      setPhoneError('')
+      setShowForm(false)
+
+      // Reload from database so the new supplier
+      // immediately appears in the supplier list.
+      await load()
+    } catch (error) {
+      console.error('Failed to add supplier:', error)
+
+      alert(
+        error?.response?.data?.message ||
+          'Failed to add supplier. Please try again.'
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function closeForm() {
+    if (saving) return
+
     setShowForm(false)
-    load()
+    setForm(emptyForm)
+    setPhoneError('')
   }
 
   return (
     <div className="min-h-full space-y-5 pb-8">
 
       {/* HEADER */}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
         <div className="flex items-center gap-3">
@@ -92,8 +173,8 @@ export default function Suppliers() {
 
       </div>
 
-
       {/* SEARCH */}
+
       <div
         className="
           rounded-2xl
@@ -105,7 +186,6 @@ export default function Suppliers() {
       >
 
         <div className="mb-2.5 flex items-center gap-2">
-
           <Search
             size={15}
             className="text-[#1689E8]"
@@ -114,14 +194,17 @@ export default function Suppliers() {
           <span className="text-[11px] font-bold text-[#071A36]">
             Search Suppliers
           </span>
-
         </div>
 
         <div className="relative w-full max-w-md">
 
           <Search
             size={16}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#1689E8]"
+            className="
+              absolute left-3.5 top-1/2
+              -translate-y-1/2
+              text-[#1689E8]
+            "
           />
 
           <input
@@ -146,10 +229,11 @@ export default function Suppliers() {
           />
 
         </div>
+
       </div>
 
-
       {/* SUPPLIER COUNT */}
+
       <div className="flex items-center justify-between">
 
         <div>
@@ -184,8 +268,8 @@ export default function Suppliers() {
 
       </div>
 
-
       {/* SUPPLIER CARDS */}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
 
         {filtered.map((s, index) => {
@@ -245,6 +329,7 @@ export default function Suppliers() {
             >
 
               {/* CARD TOP */}
+
               <div className="p-4">
 
                 <div className="flex items-start justify-between gap-3">
@@ -272,13 +357,11 @@ export default function Suppliers() {
                       </p>
 
                       <div className="mt-1 flex items-center gap-1.5">
-
                         <span className="h-1.5 w-1.5 rounded-full bg-[#19B879]" />
 
                         <span className="text-[10px] font-semibold text-[#666666]">
                           Active Supplier
                         </span>
-
                       </div>
 
                     </div>
@@ -293,18 +376,20 @@ export default function Suppliers() {
 
                 </div>
 
-
                 {/* CONTACT */}
+
                 <div className="mt-5">
 
                   <div className="flex items-center gap-2.5">
 
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#EAFBF5]">
+
                       <Phone
                         size={14}
                         className="text-[#19B879]"
                         strokeWidth={2.3}
                       />
+
                     </div>
 
                     <div className="min-w-0">
@@ -325,8 +410,8 @@ export default function Suppliers() {
 
               </div>
 
-
               {/* ADDRESS */}
+
               <div
                 className="
                   border-t border-[#E6EEF4]
@@ -338,11 +423,13 @@ export default function Suppliers() {
                 <div className="flex items-start gap-2.5">
 
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F1F5F8]">
+
                     <MapPin
                       size={14}
                       className="text-[#555555]"
                       strokeWidth={2.2}
                     />
+
                   </div>
 
                   <div className="min-w-0">
@@ -365,8 +452,8 @@ export default function Suppliers() {
           )
         })}
 
-
         {/* EMPTY STATE */}
+
         {filtered.length === 0 && (
           <div
             className="
@@ -381,10 +468,12 @@ export default function Suppliers() {
           >
 
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EAF5FF]">
+
               <Building2
                 size={25}
                 className="text-[#1689E8]"
               />
+
             </div>
 
             <p className="mt-4 text-sm font-bold text-[#071A36]">
@@ -419,8 +508,8 @@ export default function Suppliers() {
 
       </div>
 
-
       {/* ADD SUPPLIER MODAL */}
+
       {showForm && (
         <div
           className="
@@ -430,7 +519,7 @@ export default function Suppliers() {
             p-4
             backdrop-blur-[3px]
           "
-          onClick={() => setShowForm(false)}
+          onClick={closeForm}
         >
 
           <form
@@ -448,6 +537,7 @@ export default function Suppliers() {
           >
 
             {/* MODAL HEADER */}
+
             <div className="bg-gradient-to-r from-[#071A36] to-[#0C315D] px-5 py-4">
 
               <div className="flex items-center justify-between">
@@ -455,10 +545,12 @@ export default function Suppliers() {
                 <div className="flex items-center gap-3">
 
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1689E8] shadow-lg shadow-blue-900/30">
+
                     <Building2
                       size={19}
                       className="text-white"
                     />
+
                   </div>
 
                   <div>
@@ -477,11 +569,13 @@ export default function Suppliers() {
 
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
+                  onClick={closeForm}
+                  disabled={saving}
                   className="
                     flex h-8 w-8 items-center justify-center
                     rounded-lg text-white
                     hover:bg-white/10
+                    disabled:opacity-50
                   "
                 >
                   <X size={17} />
@@ -491,11 +585,12 @@ export default function Suppliers() {
 
             </div>
 
-
             {/* FORM */}
+
             <div className="max-h-[65vh] space-y-4 overflow-y-auto p-5">
 
               {/* NAME */}
+
               <div>
 
                 <label className="mb-1.5 block text-[11px] font-bold text-[#071A36]">
@@ -530,8 +625,8 @@ export default function Suppliers() {
 
               </div>
 
-
               {/* CONTACT */}
+
               <div>
 
                 <label className="mb-1.5 block text-[11px] font-bold text-[#071A36]">
@@ -542,42 +637,60 @@ export default function Suppliers() {
 
                   <Phone
                     size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#1689E8]"
+                    className="
+                      absolute left-3 top-1/2
+                      -translate-y-1/2
+                      text-[#1689E8]
+                    "
                   />
 
                   <input
                     required
-                    type="text"
-                    className="
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    className={`
                       h-10 w-full
                       rounded-xl
-                      border border-[#C9DCEB]
+                      border
+                      ${phoneError
+                        ? 'border-red-400 focus:border-red-500'
+                        : 'border-[#C9DCEB] focus:border-[#1689E8]'
+                      }
                       bg-[#FBFDFF]
                       pl-9 pr-3
                       text-xs font-medium text-[#111111]
                       outline-none
                       placeholder:text-[#888888]
-                      focus:border-[#1689E8]
                       focus:bg-white
                       focus:ring-4
                       focus:ring-[#1689E8]/10
-                    "
-                    placeholder="Phone number"
+                    `}
+                    placeholder="Enter 10-digit phone number"
                     value={form.contact}
                     onChange={(e) =>
-                      setForm({
-                        ...form,
-                        contact: e.target.value,
-                      })
+                      handlePhoneChange(e.target.value)
                     }
                   />
 
                 </div>
 
+                {phoneError && (
+                  <p className="mt-1.5 text-[10px] font-semibold text-red-500">
+                    {phoneError}
+                  </p>
+                )}
+
+                {!phoneError && form.contact.length === 10 && (
+                  <p className="mt-1.5 text-[10px] font-semibold text-[#19B879]">
+                    Valid 10-digit phone number
+                  </p>
+                )}
+
               </div>
 
-
               {/* ADDRESS */}
+
               <div>
 
                 <label className="mb-1.5 block text-[11px] font-bold text-[#071A36]">
@@ -588,7 +701,10 @@ export default function Suppliers() {
 
                   <MapPin
                     size={14}
-                    className="absolute left-3 top-3 text-[#1689E8]"
+                    className="
+                      absolute left-3 top-3
+                      text-[#1689E8]
+                    "
                   />
 
                   <textarea
@@ -623,8 +739,8 @@ export default function Suppliers() {
 
             </div>
 
-
             {/* FOOTER */}
+
             <div
               className="
                 flex flex-col-reverse gap-2
@@ -637,13 +753,15 @@ export default function Suppliers() {
 
               <button
                 type="button"
-                onClick={() => setShowForm(false)}
+                onClick={closeForm}
+                disabled={saving}
                 className="
                   h-10 rounded-xl
                   border border-[#C9DCEB]
                   bg-white px-5
                   text-xs font-bold text-[#333333]
                   hover:bg-[#F1F6FA]
+                  disabled:opacity-50
                 "
               >
                 Cancel
@@ -651,6 +769,7 @@ export default function Suppliers() {
 
               <button
                 type="submit"
+                disabled={saving || !!phoneError || form.contact.length !== 10}
                 className="
                   flex h-10 items-center justify-center gap-2
                   rounded-xl
@@ -659,15 +778,18 @@ export default function Suppliers() {
                   text-xs font-bold text-white
                   shadow-[0_5px_15px_rgba(22,137,232,0.25)]
                   hover:bg-[#1178D0]
+                  disabled:cursor-not-allowed
+                  disabled:opacity-50
                 "
               >
                 <Plus size={15} />
-                Save Supplier
+                {saving ? 'Saving...' : 'Save Supplier'}
               </button>
 
             </div>
 
           </form>
+
         </div>
       )}
 

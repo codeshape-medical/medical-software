@@ -1,6 +1,8 @@
 
 import { useEffect, useState } from 'react'
+
 import { Download, Eye, X, ChevronDown } from 'lucide-react'
+
 import { getProducts } from '../services/api'
 
 const CATEGORIES = [
@@ -12,11 +14,16 @@ const CATEGORIES = [
   'Antiseptic',
   'Cardiac',
 ]
+
 const TABS = ['Expiring Soon', 'Expired Items', 'Expiry Report']
 
 function statusTone(status) {
   if (status === 'Expired') {
     return 'bg-red-50 text-red-600 border border-red-200'
+  }
+
+  if (status === 'Valid') {
+    return 'bg-green-50 text-green-600 border border-green-200'
   }
 
   return 'bg-orange-50 text-orange-600 border border-orange-200'
@@ -74,6 +81,7 @@ function parseExpiryDate(value) {
 /* =========================================================
    DISPLAY DATE
 ========================================================= */
+
 function formatExpiryDate(value) {
   const date = parseExpiryDate(value)
 
@@ -89,6 +97,7 @@ function formatExpiryDate(value) {
 /* =========================================================
    EXCEL DATE
 ========================================================= */
+
 function excelExpiryDate(value) {
   const date = parseExpiryDate(value)
 
@@ -103,8 +112,10 @@ function excelExpiryDate(value) {
     Example:
     01-10-2026
   */
+
   return `="${day}-${month}-${year}"`
 }
+
 /* =========================================================
    RANGE CHECK
 ========================================================= */
@@ -176,6 +187,24 @@ function isExpired(expiryDate) {
 }
 
 /* =========================================================
+   EXPIRY STATUS
+========================================================= */
+
+function getExpiryStatus(expiryDate) {
+  if (!expiryDate) return 'Unknown'
+
+  if (isExpired(expiryDate)) {
+    return 'Expired'
+  }
+
+  if (isWithinRange(expiryDate, 'Next 6 Months')) {
+    return 'Expiring Soon'
+  }
+
+  return 'Valid'
+}
+
+/* =========================================================
    MAIN COMPONENT
 ========================================================= */
 
@@ -187,15 +216,17 @@ export default function ExpiryManagement() {
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
-    getProducts().then((products) => {
-      setRows(
-        (Array.isArray(products) ? products : []).map((product) => ({
-          ...product,
-          productId: product.id,
-          stock: Number(product.stock || 0),
-        }))
-      )
-    }).catch(() => setRows([]))
+    getProducts()
+      .then((products) => {
+        setRows(
+          (Array.isArray(products) ? products : []).map((product) => ({
+            ...product,
+            productId: product.id,
+            stock: Number(product.stock || 0),
+          }))
+        )
+      })
+      .catch(() => setRows([]))
   }, [])
 
   /* =======================================================
@@ -215,14 +246,11 @@ export default function ExpiryManagement() {
     let matchesTab = true
 
     if (tab === 'Expired Items') {
-      matchesTab =
-        row.status === 'Expired' ||
-        isExpired(row.expiry)
+      matchesTab = isExpired(row.expiry)
     }
 
     if (tab === 'Expiring Soon') {
       matchesTab =
-        row.status !== 'Expired' &&
         !isExpired(row.expiry) &&
         isWithinRange(row.expiry, range)
     }
@@ -250,7 +278,7 @@ export default function ExpiryManagement() {
       'Batch No',
       'Expiry Date',
       'Stock',
-      'Status'
+      'Status',
     ]
 
     const csvRows = filteredRows.map((r, index) => [
@@ -259,12 +287,12 @@ export default function ExpiryManagement() {
       r.batchNo || '',
       excelExpiryDate(r.expiry),
       r.stock ?? '',
-      r.status || ''
+      getExpiryStatus(r.expiry),
     ])
 
     const csv = [
       header,
-      ...csvRows
+      ...csvRows,
     ]
       .map((row) =>
         row
@@ -272,8 +300,9 @@ export default function ExpiryManagement() {
             const text = String(value ?? '')
 
             /*
-              Escape commas, quotes and new lines
+              Escape commas, quotes and new lines.
             */
+
             return `"${text.replace(/"/g, '""')}"`
           })
           .join(',')
@@ -283,10 +312,11 @@ export default function ExpiryManagement() {
     /*
       Excel UTF-8 BOM
     */
+
     const blob = new Blob(
       ['\uFEFF', csv],
       {
-        type: 'text/csv;charset=utf-8;'
+        type: 'text/csv;charset=utf-8;',
       }
     )
 
@@ -295,12 +325,15 @@ export default function ExpiryManagement() {
     const a = document.createElement('a')
 
     a.href = url
+
     a.download = `expiry-${tab
       .toLowerCase()
       .replace(/\s+/g, '-')}.csv`
 
     document.body.appendChild(a)
+
     a.click()
+
     document.body.removeChild(a)
 
     URL.revokeObjectURL(url)
@@ -318,7 +351,6 @@ export default function ExpiryManagement() {
 
   return (
     <div className="relative min-h-full">
-
       <div className="space-y-4">
 
         {/* =================================================
@@ -338,6 +370,7 @@ export default function ExpiryManagement() {
           </div>
 
           {/* EXPORT */}
+
           <button
             onClick={exportExcel}
             className="
@@ -368,7 +401,6 @@ export default function ExpiryManagement() {
             <Download size={15} />
             Export Excel
           </button>
-
         </div>
 
         {/* =================================================
@@ -400,11 +432,9 @@ export default function ExpiryManagement() {
               bg-[#FBFDFF]
             "
           >
-
             <div className="flex items-center gap-1 overflow-x-auto">
 
               {TABS.map((t) => (
-
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -419,20 +449,16 @@ export default function ExpiryManagement() {
                     whitespace-nowrap
                     transition-all
                     duration-200
-
                     ${
                       tab === t
                         ? `
                           text-[#1674E5]
-
                           after:absolute
                           after:left-0
                           after:right-0
                           after:bottom-[-1px]
                           after:h-[2px]
-
                           after:bg-[#1689E8]
-
                           after:shadow-[0_0_8px_rgba(22,137,232,0.65)]
                         `
                         : `
@@ -444,11 +470,9 @@ export default function ExpiryManagement() {
                 >
                   {t}
                 </button>
-
               ))}
 
             </div>
-
           </div>
 
           {/* =================================================
@@ -462,6 +486,7 @@ export default function ExpiryManagement() {
               <div className="flex flex-wrap items-center gap-2">
 
                 {/* RANGE */}
+
                 <div className="relative">
 
                   <select
@@ -484,16 +509,12 @@ export default function ExpiryManagement() {
                       font-medium
                       text-[#18365C]
                       outline-none
-
                       transition-all
                       duration-200
-
                       hover:border-[#1689E8]
-
                       focus:border-[#1689E8]
                       focus:ring-2
                       focus:ring-[#1689E8]/10
-
                       disabled:bg-[#F4F8FC]
                       disabled:text-[#9AAFC5]
                     "
@@ -518,6 +539,7 @@ export default function ExpiryManagement() {
                 </div>
 
                 {/* CATEGORY */}
+
                 <div className="relative">
 
                   <select
@@ -539,24 +561,19 @@ export default function ExpiryManagement() {
                       font-medium
                       text-[#18365C]
                       outline-none
-
                       transition-all
                       duration-200
-
                       hover:border-[#1689E8]
-
                       focus:border-[#1689E8]
                       focus:ring-2
                       focus:ring-[#1689E8]/10
                     "
                   >
-
                     <option>All Categories</option>
 
                     {CATEGORIES.map((c) => (
                       <option key={c}>{c}</option>
                     ))}
-
                   </select>
 
                   <ChevronDown
@@ -574,6 +591,7 @@ export default function ExpiryManagement() {
                 </div>
 
                 {/* RESET */}
+
                 <button
                   onClick={resetFilters}
                   className="
@@ -587,10 +605,8 @@ export default function ExpiryManagement() {
                     sm:text-sm
                     font-semibold
                     text-[#47749F]
-
                     transition-all
                     duration-200
-
                     hover:border-[#1689E8]
                     hover:text-[#1689E8]
                     hover:bg-[#F4FAFF]
@@ -646,7 +662,6 @@ export default function ExpiryManagement() {
                   {/* HEADER */}
 
                   <thead>
-
                     <tr
                       className="
                         bg-[#EFF8FF]
@@ -655,7 +670,6 @@ export default function ExpiryManagement() {
                         text-[#123B66]
                       "
                     >
-
                       <th className="px-3 py-3 text-center font-bold text-xs">
                         #
                       </th>
@@ -683,185 +697,170 @@ export default function ExpiryManagement() {
                       <th className="px-3 py-3 text-center font-bold text-xs">
                         Action
                       </th>
-
                     </tr>
-
                   </thead>
 
                   {/* BODY */}
 
                   <tbody>
 
-                    {filteredRows.map((r, i) => (
+                    {filteredRows.map((r, i) => {
+                      const expiryStatus = getExpiryStatus(r.expiry)
 
-                      <tr
-                        key={r.productId || i}
-                        className="
-                          border-b
-                          border-[#E5F1FB]
-                          hover:bg-[#F8FCFF]
-                          transition-all
-                          duration-150
-                        "
-                      >
-
-                        {/* # */}
-
-                        <td
+                      return (
+                        <tr
+                          key={r.productId || i}
                           className="
-                            px-3
-                            py-3
-                            text-center
-                            text-xs
-                            font-medium
-                            text-[#6B86A5]
+                            border-b
+                            border-[#E5F1FB]
+                            hover:bg-[#F8FCFF]
+                            transition-all
+                            duration-150
                           "
                         >
-                          {i + 1}
-                        </td>
 
-                        {/* MEDICINE */}
+                          {/* # */}
 
-                        <td
-                          className="
-                            px-3
-                            py-3
-                            font-semibold
-                            text-[#123B66]
-                            text-xs
-                            sm:text-sm
-                          "
-                        >
-                          {r.name}
-                        </td>
-
-                        {/* BATCH */}
-
-                        <td
-                          className="
-                            px-3
-                            py-3
-                            text-xs
-                            font-medium
-                            text-[#45617F]
-                          "
-                        >
-                          {r.batchNo}
-                        </td>
-
-                        {/* EXPIRY */}
-
-                        <td
-                          className="
-                            px-3
-                            py-3
-                            text-xs
-                            font-medium
-                            text-[#45617F]
-                          "
-                        >
-                          {formatExpiryDate(r.expiry)}
-                        </td>
-
-                        {/* STOCK */}
-
-                        <td className="px-3 py-3 text-center">
-
-                          <span
-                            className={`
-                              text-xs
-                              font-bold
-
-                              ${
-                                r.status === 'Expired'
-                                  ? 'text-red-600'
-                                  : r.stock <= 15
-                                    ? 'text-red-500'
-                                    : 'text-orange-500'
-                              }
-                            `}
-                          >
-                            {r.stock}
-                          </span>
-
-                        </td>
-
-                        {/* STATUS */}
-
-                        <td className="px-3 py-3 text-center">
-
-                          <span
-                            className={`
-                              inline-flex
-                              items-center
-                              justify-center
-                              px-2.5
-                              py-1
-                              rounded-md
-                              text-[11px]
-                              font-semibold
-                              ${statusTone(
-                                isExpired(r.expiry)
-                                  ? 'Expired'
-                                  : r.status
-                              )}
-                            `}
-                          >
-                            {isExpired(r.expiry)
-                              ? 'Expired'
-                              : r.status}
-                          </span>
-
-                        </td>
-
-                        {/* ACTION */}
-
-                        <td className="px-3 py-3 text-center">
-
-                          <button
-                            onClick={() => setSelected(r)}
-                            title="View Details"
+                          <td
                             className="
-                              w-8
-                              h-8
-                              rounded-full
-
-                              bg-[#EFF8FF]
-                              border
-                              border-[#CBE7FB]
-
-                              text-[#1689E8]
-
-                              flex
-                              items-center
-                              justify-center
-                              mx-auto
-
-                              transition-all
-                              duration-200
-
-                              hover:bg-[#1689E8]
-                              hover:text-white
-                              hover:border-[#1689E8]
-
-                              hover:shadow-[0_0_14px_rgba(22,137,232,0.30)]
+                              px-3
+                              py-3
+                              text-center
+                              text-xs
+                              font-medium
+                              text-[#6B86A5]
                             "
                           >
-                            <Eye size={15} />
-                          </button>
+                            {i + 1}
+                          </td>
 
-                        </td>
+                          {/* MEDICINE */}
 
-                      </tr>
+                          <td
+                            className="
+                              px-3
+                              py-3
+                              font-semibold
+                              text-[#123B66]
+                              text-xs
+                              sm:text-sm
+                            "
+                          >
+                            {r.name}
+                          </td>
 
-                    ))}
+                          {/* BATCH */}
+
+                          <td
+                            className="
+                              px-3
+                              py-3
+                              text-xs
+                              font-medium
+                              text-[#45617F]
+                            "
+                          >
+                            {r.batchNo || '-'}
+                          </td>
+
+                          {/* EXPIRY */}
+
+                          <td
+                            className="
+                              px-3
+                              py-3
+                              text-xs
+                              font-medium
+                              text-[#45617F]
+                            "
+                          >
+                            {formatExpiryDate(r.expiry)}
+                          </td>
+
+                          {/* STOCK */}
+
+                          <td className="px-3 py-3 text-center">
+
+                            <span
+                              className={`
+                                text-xs
+                                font-bold
+                                ${
+                                  expiryStatus === 'Expired'
+                                    ? 'text-red-600'
+                                    : r.stock <= 15
+                                      ? 'text-red-500'
+                                      : 'text-orange-500'
+                                }
+                              `}
+                            >
+                              {r.stock}
+                            </span>
+
+                          </td>
+
+                          {/* STATUS */}
+
+                          <td className="px-3 py-3 text-center">
+
+                            <span
+                              className={`
+                                inline-flex
+                                items-center
+                                justify-center
+                                px-2.5
+                                py-1
+                                rounded-md
+                                text-[11px]
+                                font-semibold
+                                ${statusTone(expiryStatus)}
+                              `}
+                            >
+                              {expiryStatus}
+                            </span>
+
+                          </td>
+
+                          {/* ACTION */}
+
+                          <td className="px-3 py-3 text-center">
+
+                            <button
+                              onClick={() => setSelected(r)}
+                              title="View Details"
+                              className="
+                                w-8
+                                h-8
+                                rounded-full
+                                bg-[#EFF8FF]
+                                border
+                                border-[#CBE7FB]
+                                text-[#1689E8]
+                                flex
+                                items-center
+                                justify-center
+                                mx-auto
+                                transition-all
+                                duration-200
+                                hover:bg-[#1689E8]
+                                hover:text-white
+                                hover:border-[#1689E8]
+                                hover:shadow-[0_0_14px_rgba(22,137,232,0.30)]
+                              "
+                            >
+                              <Eye size={15} />
+                            </button>
+
+                          </td>
+
+                        </tr>
+                      )
+                    })}
 
                     {/* EMPTY */}
 
                     {filteredRows.length === 0 && (
-
                       <tr>
-
                         <td
                           colSpan={7}
                           className="
@@ -875,9 +874,7 @@ export default function ExpiryManagement() {
                         >
                           No items found for the selected filters.
                         </td>
-
                       </tr>
-
                     )}
 
                   </tbody>
@@ -954,9 +951,7 @@ export default function ExpiryManagement() {
                     flex
                     items-center
                     justify-center
-
                     transition-all
-
                     hover:bg-red-500
                     hover:text-white
                   "
@@ -1002,7 +997,7 @@ export default function ExpiryManagement() {
                   </p>
 
                   <p className="text-xs sm:text-sm font-semibold text-[#123B66] mt-1">
-                    {selected.batchNo}
+                    {selected.batchNo || '-'}
                   </p>
                 </div>
 
@@ -1071,17 +1066,10 @@ export default function ExpiryManagement() {
                         rounded-md
                         text-[11px]
                         font-semibold
-
-                        ${statusTone(
-                          isExpired(selected.expiry)
-                            ? 'Expired'
-                            : selected.status
-                        )}
+                        ${statusTone(getExpiryStatus(selected.expiry))}
                       `}
                     >
-                      {isExpired(selected.expiry)
-                        ? 'Expired'
-                        : selected.status}
+                      {getExpiryStatus(selected.expiry)}
                     </span>
 
                   </div>
@@ -1104,20 +1092,15 @@ export default function ExpiryManagement() {
                   h-9
                   mt-4
                   rounded-lg
-
                   bg-gradient-to-r
                   from-[#1689E8]
                   to-[#1674E5]
-
                   text-white
                   text-xs
                   sm:text-sm
                   font-semibold
-
                   shadow-[0_5px_18px_rgba(22,137,232,0.22)]
-
                   hover:shadow-[0_7px_22px_rgba(22,137,232,0.32)]
-
                   transition-all
                 "
               >
@@ -1131,7 +1114,6 @@ export default function ExpiryManagement() {
         )}
 
       </div>
-
     </div>
   )
 }
