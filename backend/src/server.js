@@ -10,7 +10,10 @@ const app = express()
 const PORT = Number(process.env.PORT || 5000)
 
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN?.split(',').map((v) => v.trim()) || true,
+  origin:
+    process.env.CLIENT_ORIGIN
+      ?.split(',')
+      .map((v) => v.trim()) || true,
 }))
 
 app.use(express.json({ limit: '2mb' }))
@@ -18,25 +21,83 @@ app.use(express.json({ limit: '2mb' }))
 const asyncRoute = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next)
 
-const num = (v) => Number(v || 0)
-const dateOnly = (v) => (v ? String(v).slice(0, 10) : null)
+const num = (value) => Number(value || 0)
 
-const mapProduct = (r) => ({
-  id: r.id,
-  code: r.code,
-  name: r.name,
-  brand: r.brand,
-  category: r.category,
-  hsn: r.hsn,
-  purchasePrice: num(r.purchase_price),
-  salePrice: num(r.sale_price),
-  mrp: num(r.mrp),
-  stock: Number(r.stock || 0),
-  expiry: dateOnly(r.expiry),
-  batchNo: r.batch_no,
-  barcode: r.barcode,
+const dateOnly = (value) =>
+  value ? String(value).slice(0, 10) : null
+
+const normalizedRole = (role) =>
+  String(role || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[ -]+/g, '_')
+
+const isSuperAdmin = (user) =>
+  ['super_admin', 'superadmin'].includes(
+    normalizedRole(user?.role)
+  )
+
+async function initializeSuperAdmin() {
+  const username = String(
+    process.env.SUPER_ADMIN_ID || 'superadmin'
+  ).trim()
+
+  const password = String(
+    process.env.SUPER_ADMIN_PASSWORD || ''
+  )
+
+  const name = String(
+    process.env.SUPER_ADMIN_NAME || 'Super Admin'
+  ).trim()
+
+  if (!password) {
+    console.warn(
+      'SUPER_ADMIN_PASSWORD is not configured. ' +
+      'Skipping Super Admin account initialization.'
+    )
+    return
+  }
+
+  if (password.length < 12) {
+    throw new Error(
+      'SUPER_ADMIN_PASSWORD must be at least 12 characters.'
+    )
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12)
+
+  await query(
+    `INSERT INTO users
+      (name, username, password_hash, role, is_active)
+     VALUES ($1, $2, $3, 'super_admin', TRUE)
+     ON CONFLICT (username)
+     DO UPDATE SET
+       name = EXCLUDED.name,
+       password_hash = EXCLUDED.password_hash,
+       role = 'super_admin',
+       is_active = TRUE`,
+    [name, username, passwordHash]
+  )
+
+  console.log(
+    `Super Admin account initialized: ${username}`
+  )
+}
+const mapProduct = (product) => ({
+  id: product.id,
+  code: product.code,
+  name: product.name,
+  brand: product.brand,
+  category: product.category,
+  hsn: product.hsn,
+  purchasePrice: num(product.purchase_price),
+  salePrice: num(product.sale_price),
+  mrp: num(product.mrp),
+  stock: Number(product.stock || 0),
+  expiry: dateOnly(product.expiry),
+  batchNo: product.batch_no,
+  barcode: product.barcode,
 })
-
 const mapSupplier = (r) => ({
   id: r.id,
   name: r.name,
@@ -164,92 +225,93 @@ app.get(
   })
 )
 
+// SEARCH PRODUCTS
 app.get(
   '/api/products/search',
   authRequired,
   asyncRoute(async (req, res) => {
-    const q = String(req.query.q || '').trim()
+    const search = String(req.query.q || '').trim()
 
-    if (q.length < 2) {
+    if (search.length < 2) {
       return res.json([])
     }
 
     const result = await query(
-      `SELECT * FROM products
+      `SELECT *
+       FROM products
        WHERE name ILIKE $1
           OR brand ILIKE $1
           OR code ILIKE $1
           OR barcode ILIKE $1
-       ORDER BY
-         CASE WHEN LOWER(name) = LOWER($2) THEN 0 ELSE 1 END,
-         name
+       ORDER BY name
        LIMIT 8`,
-      [`%${q}%`, q]
+      [`%${search}%`]
     )
 
     res.json(result.rows.map(mapProduct))
   })
 )
 
+// ADD PRODUCT
 app.post(
   '/api/products',
   authRequired,
   asyncRoute(async (req, res) => {
-    const p = req.body || {}
+    const product = req.body || {}
+
+    if (!product.name?.trim()) {
+      return res.status(400).json({
+        message: 'Medicine name is required.',
+      })
+    }
+
+    // Only Super Admin may set initial stock manually.
+    const initialStock = isSuperAdmin(req.user)
+      ? Math.max(0, Math.trunc(num(product.stock)))
+      : 0
 
     const result = await query(
-      `INSERT INTO products
-        (
-          code,
-          name,
-          brand,
-          category,
-          hsn,
-          purchase_price,
-          sale_price,
-          mrp,
-          stock,
-          expiry,
-          batch_no,
-          barcode
-        )
-       VALUES
-        (
-          COALESCE(
-            $1,
-            'MED' ||
-            LPAD(
-              ((SELECT COALESCE(MAX(id),0)+1 FROM products)::text),
-              3,
-              '0'
-            )
-          ),
-          $2,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          $8,
-          $9,
-          $10,
-          $11,
-          $12
-        )
-       RETURNING *`,
+      `INSERT INTO products (
+        code,
+        name,
+        brand,
+        category,
+        hsn,
+        purchase_price,
+        sale_price,
+        mrp,
+        stock,
+        expiry,
+        batch_no,
+        barcode
+      )
+      VALUES (
+        COALESCE(
+          $1,
+          'MED' ||
+          LPAD(
+            ((SELECT COALESCE(MAX(id), 0) + 1
+              FROM products)::text),
+            3,
+            '0'
+          )
+        ),
+        $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+      )
+      RETURNING *`,
       [
-        p.code || null,
-        p.name,
-        p.brand || null,
-        p.category || null,
-        p.hsn || null,
-        num(p.purchasePrice),
-        num(p.salePrice),
-        num(p.mrp),
-        Math.max(0, Math.trunc(num(p.stock))),
-        dateOnly(p.expiry),
-        p.batchNo || null,
-        p.barcode || null,
+        product.code || null,
+        product.name.trim(),
+        product.brand || null,
+        product.category || null,
+        product.hsn || null,
+        num(product.purchasePrice),
+        num(product.salePrice),
+        num(product.mrp),
+        initialStock,
+        dateOnly(product.expiry),
+        product.batchNo || null,
+        product.barcode || null,
       ]
     )
 
@@ -257,68 +319,127 @@ app.post(
   })
 )
 
+// EDIT PRODUCT
 app.put(
   '/api/products/:id',
   authRequired,
   asyncRoute(async (req, res) => {
-    const p = req.body || {}
+    const product = req.body || {}
+
+    const existingResult = await query(
+      'SELECT id, stock FROM products WHERE id = $1 LIMIT 1',
+      [req.params.id]
+    )
+
+    const existing = existingResult.rows[0]
+
+    if (!existing) {
+      return res.status(404).json({
+        message: 'Product not found.',
+      })
+    }
+
+    const currentStock = Math.max(
+      0,
+      Math.trunc(num(existing.stock))
+    )
+
+    const requestedStock = Math.max(
+      0,
+      Math.trunc(num(product.stock))
+    )
+
+    // Block manual stock changes by ordinary Admins.
+    if (
+      !isSuperAdmin(req.user) &&
+      product.stock !== undefined &&
+      requestedStock !== currentStock
+    ) {
+      return res.status(403).json({
+        message:
+          'Only the Super Admin can manually edit medicine stock.',
+        code: 'SUPER_ADMIN_STOCK_PERMISSION_REQUIRED',
+      })
+    }
+
+    const stockToSave = isSuperAdmin(req.user) &&
+      product.stock !== undefined
+      ? requestedStock
+      : currentStock
 
     const result = await query(
       `UPDATE products
        SET
-         name=$1,
-         brand=$2,
-         category=$3,
-         hsn=$4,
-         purchase_price=$5,
-         sale_price=$6,
-         mrp=$7,
-         stock=$8,
-         expiry=$9,
-         batch_no=$10,
-         barcode=$11,
-         updated_at=CURRENT_TIMESTAMP
-       WHERE id=$12
+         name = $1,
+         brand = $2,
+         category = $3,
+         hsn = $4,
+         purchase_price = $5,
+         sale_price = $6,
+         mrp = $7,
+         stock = $8,
+         expiry = $9,
+         batch_no = $10,
+         barcode = $11,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = $12
        RETURNING *`,
       [
-        p.name,
-        p.brand || null,
-        p.category || null,
-        p.hsn || null,
-        num(p.purchasePrice),
-        num(p.salePrice),
-        num(p.mrp),
-        Math.max(0, Math.trunc(num(p.stock))),
-        dateOnly(p.expiry),
-        p.batchNo || null,
-        p.barcode || null,
+        product.name,
+        product.brand || null,
+        product.category || null,
+        product.hsn || null,
+        num(product.purchasePrice),
+        num(product.salePrice),
+        num(product.mrp),
+        stockToSave,
+        dateOnly(product.expiry),
+        product.batchNo || null,
+        product.barcode || null,
         req.params.id,
       ]
     )
-
-    if (!result.rows[0]) {
-      return res
-        .status(404)
-        .json({ message: 'Product not found' })
-    }
 
     res.json(mapProduct(result.rows[0]))
   })
 )
 
+// DELETE PRODUCT
 app.delete(
   '/api/products/:id',
   authRequired,
   asyncRoute(async (req, res) => {
+    const result = await query(
+      'SELECT id, stock FROM products WHERE id = $1 LIMIT 1',
+      [req.params.id]
+    )
+
+    const product = result.rows[0]
+
+    if (!product) {
+      return res.status(404).json({
+        message: 'Product not found.',
+      })
+    }
+
+    if (
+      !isSuperAdmin(req.user) &&
+      Number(product.stock || 0) > 0
+    ) {
+      return res.status(403).json({
+        message:
+          'Only the Super Admin can delete a medicine that has stock.',
+      })
+    }
+
     await query(
-      'DELETE FROM products WHERE id=$1',
+      'DELETE FROM products WHERE id = $1',
       [req.params.id]
     )
 
     res.json({ success: true })
   })
 )
-
 /* ================= CUSTOMERS ================= */
 
 app.get(
@@ -2328,16 +2449,19 @@ app.use((err, req, res, next) => {
 
 /* ================= SERVER ================= */
 
-app.listen(PORT, () => {
-  console.log(
-    `Medical Store backend running on http://localhost:${PORT}`
-  )
-})
+async function startServer() {
+  try {
+    // Create or update the Super Admin account first
+    await initializeSuperAdmin()
 
-process.on(
-  'SIGINT',
-  () =>
-    pool.end().then(() =>
-      process.exit(0)
-    )
-)
+    // Start the server after initialization succeeds
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`)
+    })
+  } catch (error) {
+    console.error('Failed to initialize server:', error)
+    process.exit(1)
+  }
+}
+
+startServer()
