@@ -127,6 +127,14 @@ export async function getReports(type, params = {}) {
   return unwrap(data)
 }
 
+export async function getReportDetail(kind, id) {
+  const { data } = await http.get(
+    `/report-details/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`
+  )
+
+  return unwrap(data)
+}
+
 export async function getSettings() {
   const { data } = await http.get('/settings')
   return unwrap(data)

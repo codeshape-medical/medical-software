@@ -2200,6 +2200,7 @@
 //   )
 // }
 
+import * as api from '../services/api'
 
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -2224,8 +2225,6 @@ import {
   MessageCircle,
 } from 'lucide-react'
 
-import * as api from '../services/api'
-import { getReports } from '../services/api'
 
 const WHATSAPP_NUMBER = '919250048457'
 
@@ -2283,6 +2282,10 @@ const HIDDEN_KEYS = new Set([
   'password',
   'passwordHash',
   'token',
+  'createdAt',
+  'updatedAt',
+  'created_at',
+  'updated_at',
 ])
 
 const MONEY_KEYS = new Set([
@@ -2416,6 +2419,63 @@ function splitDetail(data) {
   })
 
   return { fields, objects, lists }
+}
+
+function removeDuplicateFields(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return data
+  }
+
+  const result = { ...data }
+
+  // Hide database metadata
+  const hidden = [
+    'createdAt',
+    'updatedAt',
+    'created_at',
+    'updated_at',
+  ]
+
+  hidden.forEach((key) => delete result[key])
+
+  // Fields that commonly represent the same information
+  const groups = [
+    ['billNo', 'bill_no', 'saleId', 'sale_id'],
+    ['customer', 'customerName', 'customer_name'],
+    ['phone', 'customerPhone', 'customer_phone'],
+    ['payment', 'paymentMethod', 'payment_method'],
+    ['date', 'saleDate', 'sale_date'],
+    ['amount', 'grandTotal', 'grand_total'],
+    ['supplier', 'supplierName', 'supplier_name'],
+    ['invoiceNo', 'invoice_no'],
+    ['returnNo', 'return_no'],
+  ]
+
+  groups.forEach((keys) => {
+    const present = keys.filter(
+      (key) => result[key] !== undefined && result[key] !== null
+    )
+
+    // Retain one value, preferring the first key in the group
+    present.slice(1).forEach((key) => delete result[key])
+  })
+
+  // Remove repeated values in nested objects and arrays too
+  Object.keys(result).forEach((key) => {
+    const value = result[key]
+
+    if (Array.isArray(value)) {
+      result[key] = value.map((item) =>
+        item && typeof item === 'object'
+          ? removeDuplicateFields(item)
+          : item
+      )
+    } else if (value && typeof value === 'object') {
+      result[key] = removeDuplicateFields(value)
+    }
+  })
+
+  return result
 }
 
 function FieldGrid({ entries }) {
@@ -2739,35 +2799,39 @@ export default function Reports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected])
 
-  async function loadReport() {
-    setLoading(true)
+  
+async function loadReport() {
+  setLoading(true)
 
-    try {
-      const params =
-        tab === 'today-sales' ||
-        tab === 'stock' ||
-        tab === 'customers' ||
-        tab === 'suppliers' ||
-        tab === 'expiry' ||
-        tab === 'low-stock'
-          ? {}
-          : { from, to }
+  try {
+    const params =
+      tab === 'today-sales' ||
+      tab === 'stock' ||
+      tab === 'customers' ||
+      tab === 'suppliers' ||
+      tab === 'expiry' ||
+      tab === 'low-stock'
+        ? {}
+        : { from, to }
 
-      const data = await getReports(tab, params)
-      setRows(getReportRows(data))
-    } catch (error) {
-      console.error('Unable to load report:', error)
-      setRows([])
-    } finally {
-      setLoading(false)
-    }
+    const result = await api.getReports(tab, params)
+
+    // Use the API response stored in result
+    setRows(getReportRows(result))
+  } catch (error) {
+    console.error('Unable to load report:', error)
+    setRows([])
+  } finally {
+    setLoading(false)
   }
+}
+
 
   async function openDetail(row) {
     const requestId = ++detailReq.current
 
     setSelected(row)
-    setDetail(row)
+   setDetail(removeDuplicateFields(row))
     setDetailLoading(false)
     setDetailNotice('')
 
@@ -2797,7 +2861,12 @@ export default function Reports() {
           ? res.data
           : res
 
-      setDetail({ ...row, ...(payload || {}) })
+      setDetail(
+  removeDuplicateFields({
+    ...row,
+    ...(payload || {}),
+  })
+)
     } catch (error) {
       if (requestId !== detailReq.current) return
 
@@ -3201,13 +3270,13 @@ export default function Reports() {
       const today = getTodayString(now)
 
       // Fetch all four summaries from the existing reports API.
-      const [salesResult, purchasesResult, returnsResult, paymentsResult] =
-        await Promise.all([
-          getReports('today-sales', {}),
-          getReports('purchases', { from: today, to: today }),
-          getReports('returns', { from: today, to: today }),
-          getReports('payments', { from: today, to: today }),
-        ])
+     const [salesResult, purchasesResult, returnsResult, paymentsResult] =
+  await Promise.all([
+    api.getReports('today-sales', {}),
+    api.getReports('purchases', { from: today, to: today }),
+    api.getReports('returns', { from: today, to: today }),
+    api.getReports('payments', { from: today, to: today }),
+  ])
 
       const sales = getReportRows(salesResult)
       const purchases = getReportRows(purchasesResult)

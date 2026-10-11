@@ -963,7 +963,7 @@ export default function Billing() {
               className="bg-[#EDF6FD] text-[#1689E8] rounded-lg flex flex-col items-center justify-center gap-1.5 min-h-[58px] text-[11px] font-bold border border-[#CDE4FA] hover:bg-[#DDEFFF] transition-all disabled:opacity-50"
             >
               <PauseCircle size={19} />
-              {saving ? 'Saving...' : 'Hold Bill'}
+              {saving ? 'Saving...' : 'Save Bill'}
             </button>
 
             <button

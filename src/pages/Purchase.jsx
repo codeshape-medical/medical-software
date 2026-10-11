@@ -23,6 +23,17 @@ import {
   getSupplierTransactions,
 } from '../services/api'
 
+
+
+function getLocalDateString() {
+  const date = new Date()
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
 function normalizeDate(value) {
   if (!value) return ''
 
@@ -69,8 +80,8 @@ export default function Purchase() {
 
   const [invoiceNo, setInvoiceNo] = useState('')
   const [invoiceDate, setInvoiceDate] = useState(
-    new Date().toISOString().slice(0, 10)
-  )
+  getLocalDateString()
+)
 
   const [search, setSearch] = useState('')
   const [items, setItems] = useState([])
@@ -145,23 +156,20 @@ export default function Purchase() {
     }
   }
 
-  async function loadSupplierTransactions(id) {
-    try {
-      const rows = await getSupplierTransactions(id)
+ async function loadSupplierTransactions(id) {
+  try {
+    const rows = await getSupplierTransactions(id)
 
-      setSupplierTransactions(
-        Array.isArray(rows) ? rows : []
-      )
-    } catch (error) {
-      console.error(
-        'Supplier transaction loading failed:',
-        error
-      )
+    console.log('Supplier transaction dates:', rows)
 
-      setSupplierTransactions([])
-    }
+    setSupplierTransactions(
+      Array.isArray(rows) ? rows : []
+    )
+  } catch (error) {
+    console.error('Supplier transaction loading failed:', error)
+    setSupplierTransactions([])
   }
-
+}
   /* =========================================================
      MEDICINE SEARCH
   ========================================================= */
@@ -326,9 +334,7 @@ export default function Purchase() {
     setSupplierMatched(false)
 
     setInvoiceNo('')
-    setInvoiceDate(
-      new Date().toISOString().slice(0, 10)
-    )
+    setInvoiceDate(getLocalDateString())
 
     setSearch('')
     setItems([])
@@ -1870,7 +1876,19 @@ if (!phone) {
                                 py-2.5
                                 text-[#6B86A5]
                               ">
-                                {transaction.date}
+                                
+{transaction.date
+  ? (() => {
+      const match = String(transaction.date).match(
+        /^(\d{4})-(\d{2})-(\d{2})/
+      )
+
+      return match
+        ? `${match[3]}-${match[2]}-${match[1]}`
+        : transaction.date
+    })()
+  : '-'}
+
                               </td>
 
                               <td className="

@@ -23,9 +23,29 @@ const asyncRoute = (fn) => (req, res, next) =>
 
 const num = (value) => Number(value || 0)
 
-const dateOnly = (value) =>
-  value ? String(value).slice(0, 10) : null
 
+const dateOnly = (value) => {
+  if (!value) return null;
+
+  // PostgreSQL DATE returned as a string
+  if (typeof value === 'string') {
+    const match = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+
+  // Handle Date objects using UTC components
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+
+    return [
+      value.getUTCFullYear(),
+      String(value.getUTCMonth() + 1).padStart(2, '0'),
+      String(value.getUTCDate()).padStart(2, '0'),
+    ].join('-');
+  }
+
+  return null;
+};
 const normalizedRole = (role) =>
   String(role || '')
     .trim()
@@ -516,17 +536,23 @@ app.post(
 )
 
 app.get('/api/suppliers/:id/transactions', authRequired, asyncRoute(async (req, res) => {
-  const result = await query(
-    `SELECT p.id,p.invoice_no,p.invoice_date,p.total_amount,
-            COALESCE(COUNT(pi.id),0)::int item_count,
-            COALESCE(SUM(pi.quantity),0)::int item_quantity
-     FROM purchases p
-     LEFT JOIN purchase_items pi ON pi.purchase_id=p.id
-     WHERE p.supplier_id=$1
-     GROUP BY p.id
-     ORDER BY p.invoice_date DESC,p.id DESC`,
-    [req.params.id]
-  )
+  
+const result = await query(
+  `SELECT
+     p.id,
+     p.invoice_no,
+     p.invoice_date::text AS invoice_date,
+     p.total_amount,
+     COALESCE(COUNT(pi.id), 0)::int AS item_count,
+     COALESCE(SUM(pi.quantity), 0)::int AS item_quantity
+   FROM purchases p
+   LEFT JOIN purchase_items pi ON pi.purchase_id = p.id
+   WHERE p.supplier_id = $1
+   GROUP BY p.id
+   ORDER BY p.invoice_date DESC, p.id DESC`,
+  [req.params.id]
+);
+
 
   res.json(result.rows.map((r) => ({
     id: r.id,
@@ -2389,7 +2415,285 @@ app.get(
     res.json([])
   })
 )
+/* =====================================================
+   REPORT DETAIL ROUTE
+   Place before app.listen(...)
+===================================================== */
 
+app.get(
+  '/api/report-details/:kind/:id',
+  authRequired,
+  asyncRoute(async (req, res) => {
+    const { kind, id } = req.params
+    let result
+
+    if (kind === 'sale') {
+      result = await query(
+        `SELECT
+           s.*,
+           s.bill_no AS "billNo",
+           s.sale_date AS date,
+           s.customer_name AS customer,
+           s.customer_phone AS "customerPhone",
+           s.customer_address AS "customerAddress",
+           s.payment_method AS "paymentMethod",
+           s.billed_by AS "billedBy",
+           s.subtotal,
+           s.discount_amount AS discount,
+           s.tax,
+           s.grand_total AS "grandTotal"
+         FROM sales s
+         WHERE s.bill_no::text = $1 OR s.id::text = $1
+         LIMIT 1`,
+        [id]
+      )
+
+      if (!result.rows[0]) {
+        return res.status(404).json({ message: 'Sale not found' })
+      }
+
+      const sale = result.rows[0]
+      const items = await query(
+        `SELECT
+           id,
+           product_id AS "productId",
+           product_name AS name,
+           batch_no AS "batchNo",
+           quantity AS qty,
+           price,
+           amount
+         FROM sale_items
+         WHERE sale_id = $1
+         ORDER BY id`,
+        [sale.id]
+      )
+
+      return res.json({
+        ...sale,
+        subtotal: num(sale.subtotal),
+        discount: num(sale.discount),
+        tax: num(sale.tax),
+        grandTotal: num(sale.grandTotal),
+        items: items.rows.map((item) => ({
+          ...item,
+          qty: Number(item.qty || 0),
+          price: num(item.price),
+          amount: num(item.amount),
+        })),
+      })
+    }
+
+    if (kind === 'purchase') {
+      result = await query(
+        `SELECT
+           p.*,
+           p.invoice_no AS "invoiceNo",
+           p.invoice_date AS date,
+           p.total_amount AS "totalAmount",
+           s.name AS supplier,
+           s.contact AS "supplierContact",
+           s.address AS "supplierAddress"
+         FROM purchases p
+         LEFT JOIN suppliers s ON s.id = p.supplier_id
+         WHERE p.id::text = $1 OR p.invoice_no::text = $1
+         LIMIT 1`,
+        [id]
+      )
+
+      if (!result.rows[0]) {
+        return res.status(404).json({ message: 'Purchase not found' })
+      }
+
+      const purchase = result.rows[0]
+      const items = await query(
+        `SELECT
+           id,
+           product_id AS "productId",
+           product_name AS name,
+           batch_no AS "batchNo",
+           expiry_date AS expiry,
+           quantity AS qty,
+           rate,
+           amount
+         FROM purchase_items
+         WHERE purchase_id = $1
+         ORDER BY id`,
+        [purchase.id]
+      )
+
+      return res.json({
+        ...purchase,
+        totalAmount: num(purchase.totalAmount),
+        items: items.rows.map((item) => ({
+          ...item,
+          qty: Number(item.qty || 0),
+          rate: num(item.rate),
+          amount: num(item.amount),
+          expiry: item.expiry ? dateOnly(item.expiry) : null,
+        })),
+      })
+    }
+
+    if (kind === 'medicine') {
+      result = await query(
+        'SELECT * FROM products WHERE id::text = $1 LIMIT 1',
+        [id]
+      )
+
+      if (!result.rows[0]) {
+        return res.status(404).json({ message: 'Medicine not found' })
+      }
+
+      const p = result.rows[0]
+
+      return res.json({
+        ...p,
+        productId: p.id,
+        purchasePrice: num(p.purchase_price),
+        salePrice: num(p.sale_price),
+        mrp: num(p.mrp),
+        stock: Number(p.stock || 0),
+        expiry: p.expiry ? dateOnly(p.expiry) : null,
+      })
+    }
+
+    if (kind === 'customer') {
+      result = await query(
+        `SELECT
+           c.*,
+           COUNT(s.id)::int AS "totalBills",
+           COALESCE(SUM(s.grand_total), 0) AS "totalAmount",
+           MAX(s.sale_date) AS "lastSale"
+         FROM customers c
+         LEFT JOIN sales s ON s.customer_id = c.id
+         WHERE c.id::text = $1
+         GROUP BY c.id
+         LIMIT 1`,
+        [id]
+      )
+
+      if (!result.rows[0]) {
+        return res.status(404).json({ message: 'Customer not found' })
+      }
+
+      const customer = result.rows[0]
+      const transactions = await query(
+        `SELECT
+           id,
+           bill_no AS "billNo",
+           sale_date AS date,
+           payment_method AS "paymentMethod",
+           grand_total AS amount
+         FROM sales
+         WHERE customer_id = $1
+         ORDER BY sale_date DESC, id DESC`,
+        [customer.id]
+      )
+
+      return res.json({
+        ...customer,
+        totalAmount: num(customer.totalAmount),
+        transactions: transactions.rows.map((row) => ({
+          ...row,
+          amount: num(row.amount),
+        })),
+      })
+    }
+
+    if (kind === 'supplier') {
+      result = await query(
+        `SELECT
+           s.*,
+           COUNT(p.id)::int AS "totalPurchases",
+           COALESCE(SUM(p.total_amount), 0) AS "totalAmount",
+           MAX(p.invoice_date) AS "lastPurchase"
+         FROM suppliers s
+         LEFT JOIN purchases p ON p.supplier_id = s.id
+         WHERE s.id::text = $1
+         GROUP BY s.id
+         LIMIT 1`,
+        [id]
+      )
+
+      if (!result.rows[0]) {
+        return res.status(404).json({ message: 'Supplier not found' })
+      }
+
+      const supplier = result.rows[0]
+      const transactions = await query(
+        `SELECT
+           id,
+           invoice_no AS "invoiceNo",
+           invoice_date AS date,
+           total_amount AS amount
+         FROM purchases
+         WHERE supplier_id = $1
+         ORDER BY invoice_date DESC, id DESC`,
+        [supplier.id]
+      )
+
+      return res.json({
+        ...supplier,
+        totalAmount: num(supplier.totalAmount),
+        transactions: transactions.rows.map((row) => ({
+          ...row,
+          amount: num(row.amount),
+        })),
+      })
+    }
+
+    if (kind === 'return') {
+      result = await query(
+        `SELECT
+           r.*,
+           r.return_no AS "returnNo",
+           r.total_amount AS "totalAmount",
+           r.created_at AS date,
+           s.bill_no AS "billNo",
+           s.customer_name AS customer
+         FROM returns r
+         LEFT JOIN sales s ON s.id = r.sale_id
+         WHERE r.id::text = $1 OR r.return_no::text = $1
+         LIMIT 1`,
+        [id]
+      )
+
+      if (!result.rows[0]) {
+        return res.status(404).json({ message: 'Return not found' })
+      }
+
+      const record = result.rows[0]
+      const items = await query(
+        `SELECT
+           id,
+           product_id AS "productId",
+           product_name AS name,
+           quantity AS qty,
+           price,
+           amount
+         FROM return_items
+         WHERE return_id = $1
+         ORDER BY id`,
+        [record.id]
+      )
+
+      return res.json({
+        ...record,
+        totalAmount: num(record.totalAmount),
+        items: items.rows.map((item) => ({
+          ...item,
+          qty: Number(item.qty || 0),
+          price: num(item.price),
+          amount: num(item.amount),
+        })),
+      })
+    }
+
+    return res.status(400).json({
+      message: 'Unsupported report detail type',
+    })
+  })
+)
 /* ================= SETTINGS ================= */
 
 app.get(
