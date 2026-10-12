@@ -475,7 +475,7 @@ export default function Billing() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>City Care Hospital - Bill</title>
+          <title>Narayan Hospital - Bill</title>
           <style>
             * { box-sizing: border-box; }
             body { margin: 0; padding: 20px; background: #f5f7fa; font-family: Arial, Helvetica, sans-serif; color: #17212b; }
@@ -506,8 +506,9 @@ export default function Billing() {
         <body>
           <div class="receipt">
             <div class="header">
-              <img src="/images/logo.png" class="logo" alt="City Care Hospital" />
-              <p class="hospital">City Care Hospital</p>
+              <img src="/images/logo.png" class="logo" alt="Narayan Hospital" />
+              <p class="hospital">Narayan Hospital</p>
+              <p class="hospital">Multispeciality Hospital</p>
               <p class="store">Medical Store</p>
               <span class="bill-title">MEDICAL STORE BILL</span>
             </div>
@@ -550,7 +551,7 @@ export default function Billing() {
             </div>
 
             <div class="footer">
-              <strong>Thank you for choosing City Care Hospital</strong><br />
+              <strong>Thank you for choosing Narayan Hospital</strong><br />
               Please keep this bill for your records.
             </div>
           </div>
@@ -575,7 +576,7 @@ export default function Billing() {
     if (!bill) return
 
     const billText = [
-      '*CITY CARE HOSPITAL*',
+      '*Narayan Hospital*',
       '*Medical Store Bill*',
       '',
       `Bill No: ${bill.billNumber}`,
@@ -598,7 +599,7 @@ export default function Billing() {
       `Payment: ${bill.paymentMethod}`,
       `Billed By: ${bill.billedBy}`,
       '',
-      'Thank you for choosing City Care Hospital.',
+      'Thank you for choosing Narayan Hospital.',
     ].join('\n')
 
     const whatsappNumber = '9192500048457'

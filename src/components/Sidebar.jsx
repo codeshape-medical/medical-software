@@ -138,7 +138,7 @@ export default function Sidebar({ open, onClose }) {
 >
   <img
     src="/images/logo.png"
-    alt="City Care Hospital Logo"
+    alt="Narayan Hospital Logo"
     className="
       w-full
       h-full

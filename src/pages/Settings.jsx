@@ -26,7 +26,7 @@ export default function Settings() {
   const [tab, setTab] = useState(TABS[0])
 
   const [store, setStore] = useState({
-    name: 'City Care Hospital',
+    name: 'Narayan Hospital',
     subtitle: 'Medical Store',
     phone: '9876500000',
     email: 'store@citycarehospital.com',

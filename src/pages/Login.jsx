@@ -232,7 +232,7 @@ export default function Login() {
                   </p>
 
                   <p className="text-[11px] text-white mt-0.5">
-                    Medical Store Management
+                    Medical Store 
                   </p>
                 </div>
 
