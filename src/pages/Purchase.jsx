@@ -1279,8 +1279,8 @@ if (!phone) {
                     <input
                       required
                       type="number"
-                      min="0"
-                      step="0.01"
+                      min="1"
+                      step="1"
                       className={inputClass}
                       placeholder="Enter purchase rate"
                       value={newMedicine.rate}
@@ -1297,8 +1297,8 @@ if (!phone) {
                       <label className="block text-[10px] font-bold text-[#45617F] mb-1">Sale Price</label>
                     <input
                       type="number"
-                      min="0"
-                      step="0.01"
+                      min="1"
+                      step="1"
                       className={inputClass}
                       placeholder="Enter sale price"
                       value={newMedicine.salePrice}
@@ -1315,8 +1315,8 @@ if (!phone) {
                       <label className="block text-[10px] font-bold text-[#45617F] mb-1">MRP</label>
                     <input
                       type="number"
-                      min="0"
-                      step="0.01"
+                      min="1"
+                      step="1"
                       className={inputClass}
                       placeholder="Enter MRP"
                       value={newMedicine.mrp}
@@ -1562,8 +1562,8 @@ if (!phone) {
                           <input
                             required
                             type="number"
-                            min="0"
-                            step="0.01"
+                            min="1"
+                            step="1"
                             className="
                               h-9
                               w-24
