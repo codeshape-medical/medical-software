@@ -284,7 +284,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { ReceiptText, Pill, ShoppingCart, Boxes, CalendarClock, Truck, BarChart3, Undo2, Settings, LogOut, X, LayoutDashboard } from 'lucide-react'
 import { getCurrentUser, hasPermission, logout } from '../services/api'
-
+import useStoreSettings from '../hooks/useStoreSettings'
 const NAV_ITEMS = [
   { to: '/dashboard', section: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/billing', section: 'billing', label: 'Billing (POS)', icon: ReceiptText },
@@ -304,15 +304,15 @@ export default function Sidebar({ open, onClose }) {
   const items = NAV_ITEMS.filter((item) => hasPermission(user, item.section, 'view'))
   const handleLogout = () => { logout(); onClose?.(); navigate('/login', { replace: true }) }
   const handleDashboard = () => { onClose?.(); navigate('/dashboard') }
-
+const store = useStoreSettings()
   return <>
     {open && <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px] md:hidden" onClick={onClose} />}
     <aside className={`fixed md:static inset-y-0 left-0 z-50 w-[225px] shrink-0 flex flex-col bg-[#071A36] text-white shadow-[10px_0_35px_rgba(0,0,0,0.22)] transition-transform duration-300 ease-out ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
       <div className="h-[82px] shrink-0 flex items-center px-3 relative">
         <button type="button" onClick={onClose} aria-label="Close sidebar" className="md:hidden absolute top-3 right-3 w-7 h-7 rounded-md flex items-center justify-center text-white hover:bg-white hover:text-[#071A36]"><X size={17} /></button>
         <button type="button" onClick={handleDashboard} className="flex items-center gap-2.5 w-full text-left rounded-lg p-1" aria-label="Go to Dashboard">
-          <div className="w-[42px] h-[42px] shrink-0 rounded-full bg-[#132947] border border-[#E8D5A8]/40 flex items-center justify-center overflow-hidden"><img src="/images/logo.png" alt="Narayan Hospital Logo" className="w-full h-full object-cover rounded-full" /></div>
-          <p className="text-[14px] font-bold text-white tracking-wide whitespace-nowrap">Narayan Hospital</p>
+          <div className="w-[42px] h-[42px] shrink-0 rounded-full bg-[#132947] border border-[#E8D5A8]/40 flex items-center justify-center overflow-hidden"><img src="/images/logo.png" alt={`${store.name} Logo`} className="w-full h-full object-cover rounded-full" /></div>
+         <p className="text-[14px] font-bold text-white tracking-wide whitespace-nowrap">{store.name}</p>
         </button>
       </div>
       <nav className="flex-1 overflow-y-auto px-2.5 pt-2 pb-3"><div className="space-y-1">

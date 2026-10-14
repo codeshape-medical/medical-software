@@ -1,5 +1,4 @@
 
-
 import { useEffect, useState } from 'react'
 import { Search, Plus, Minus, Trash2, Printer, PauseCircle, X } from 'lucide-react'
 
@@ -9,12 +8,7 @@ import {
   searchProducts,
   searchCustomersByPhone,
 } from '../services/api'
-
-/* ================= SHOP SETTINGS ================= */
-
-// Shop's WhatsApp number (the number logged in on WhatsApp Web / Desktop
-// on the billing computer). Messages are SENT FROM that logged-in account.
-const SHOP_WHATSAPP = '9123547783'
+import useStoreSettings from '../hooks/useStoreSettings'
 
 /* ================= WHATSAPP ICON ================= */
 
@@ -67,6 +61,21 @@ function isValidIndianPhone(value) {
   return /^[6-9]\d{9}$/.test(normalizePhone(value))
 }
 
+// Store phone from Settings -> last 10 digits (works with "+91 98..." too)
+// Store contact number from Settings
+function storePhoneDigits(store) {
+  return String(
+     store?.whatsappNumber ||
+    store?.whatsapp ||
+    store?.whatsappPhone ||
+    store?.phoneNumber ||
+    store?.phone ||
+    ''
+  )
+    .replace(/\D/g, '')
+    .slice(-10)
+}
+
 function cleanName(value) {
   return String(value ?? '').replace(/[^A-Za-z .'-]/g, '').slice(0, 100)
 }
@@ -92,9 +101,27 @@ function discountLabelOf(bill) {
 
 /* ===== WhatsApp message goes to the CUSTOMER's number (entered in the bill) ===== */
 
-function buildWhatsAppText(bill) {
+
+function buildWhatsAppText(bill, store) {
+  const shopPhone = storePhoneDigits(store)
+  const storeName =
+    store?.name ||
+    store?.storeName ||
+    store?.hospitalName ||
+    'Medical Store'
+
+  const subtitle =
+    store?.subtitle ||
+    store?.tagline ||
+    store?.description ||
+    ''
+
+  const title = subtitle
+    ? `${storeName} - ${subtitle}`
+    : storeName
+
   const lines = [
-    '*Narayan Hospital - Medical Store*',
+    `*${title}*`,
     '',
     `Bill No: *${bill.billNumber}*`,
     `Date: ${bill.date}  ${bill.time}`,
@@ -103,27 +130,37 @@ function buildWhatsAppText(bill) {
     `Subtotal: ₹${bill.subtotal.toFixed(2)}`,
   ]
 
-  // Discount line only when a discount was given
   if (bill.discountAmount > 0) {
-    lines.push(`${discountLabelOf(bill)}: -₹${bill.discountAmount.toFixed(2)}`)
+    lines.push(
+      `${discountLabelOf(bill)}: -₹${bill.discountAmount.toFixed(2)}`
+    )
   }
 
   lines.push(`*Total Amount: ₹${bill.grandTotal.toFixed(2)}*`)
   lines.push(`Payment: ${bill.paymentMethod}`)
-  lines.push('', 'Thank you for choosing Narayan Hospital.', `Contact: +91 ${SHOP_WHATSAPP}`)
+  lines.push('', `Thank you for choosing ${storeName}.`)
+
+  if (shopPhone) {
+    lines.push(`Contact: +91 ${shopPhone}`)
+  }
 
   return lines.join('\n')
 }
 
-function whatsappUrl(bill) {
+
+function whatsappUrl(bill, store) {
   // 91 = India country code, then the customer's 10-digit number
   const customerNumber = `91${normalizePhone(bill.customer.phone)}`
-  return `https://wa.me/${customerNumber}?text=${encodeURIComponent(buildWhatsAppText(bill))}`
+  return `https://wa.me/${customerNumber}?text=${encodeURIComponent(buildWhatsAppText(bill, store))}`
 }
 
 /* ================= BILLING ================= */
 
 export default function Billing() {
+  // Store name / phone / email come from Settings (updates everywhere automatically)
+  const store = useStoreSettings()
+  const shopPhone = storePhoneDigits(store)
+
   const [products, setProducts] = useState([])
   const [cart, setCart] = useState([])
 
@@ -469,9 +506,7 @@ export default function Billing() {
     }
   }
 
-  /* ================= PRINT BILL (A5 LANDSCAPE) + WHATSAPP ================= */
-
-   /* ================= PRINT BILL (A4 PORTRAIT, HALF PAGE) + WHATSAPP ================= */
+  /* ================= PRINT BILL (A4 PORTRAIT, HALF PAGE) + WHATSAPP ================= */
 
   async function printBill() {
     if (!validateBill()) return
@@ -494,7 +529,7 @@ export default function Billing() {
     }
 
     // WhatsApp chat with the CUSTOMER's number, message pre-filled
-    if (waWindow) waWindow.location.href = whatsappUrl(bill)
+    if (waWindow) waWindow.location.href = whatsappUrl(bill, store)
 
     const itemsHTML = bill.items
       .map(
@@ -530,12 +565,29 @@ export default function Billing() {
     const info = (label, value) =>
       `<div class="irow"><b>${label}</b><i>:</i><span>${esc(value)}</span></div>`
 
+    // Store details (from Settings)
+    const storeName = String(store.name || '').trim() || 'Medical Store'
+    const contactHTML =
+      shopPhone || store.email
+        ? `<div class="contact">
+             <div class="phone-ic">
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                 <path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1l-2.2 2.2Z"/>
+               </svg>
+             </div>
+             <div>
+               ${shopPhone ? `Contact:<br/>+91 ${esc(shopPhone)}` : ''}
+               ${store.email ? `<br/><span class="small">${esc(store.email)}</span>` : ''}
+             </div>
+           </div>`
+        : ''
+
     printWindow.document.write(`
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Narayan Hospital - Bill</title>
+  <title>${esc(storeName)} - Bill</title>
   <style>
     * { box-sizing: border-box; }
 
@@ -585,8 +637,8 @@ export default function Billing() {
     .divider { width: 1px; height: 14mm; background: #8aa5cc; }
     .hname { font-size: 26px; font-weight: 800; color: var(--dark); letter-spacing: .5px; line-height: 1.05; }
     .hsub  { font-size: 13px; color: var(--dark); margin-top: 1mm; }
-    .hsub .dot { margin: 0 3mm; }
     .contact { display: flex; align-items: center; gap: 2.5mm; color: var(--blue); font-weight: 700; font-size: 13px; line-height: 1.3; }
+    .contact .small { font-size: 11px; font-weight: 600; }
     .phone-ic {
       width: 10mm; height: 10mm; border-radius: 50%;
       background: var(--blue); color: #fff;
@@ -704,21 +756,14 @@ export default function Billing() {
 
     <div class="header">
       <div class="brand">
-        <img src="/images/logo.png" class="logo" alt="Narayan" />
+        <img src="/images/logo.png" class="logo" alt="${esc(storeName)}" />
         <div class="divider"></div>
         <div>
-          <div class="hname">NARAYAN HOSPITAL</div>
-          <div class="hsub">Multispeciality Hospital<span class="dot">•</span>Medical Store</div>
+          <div class="hname">${esc(storeName.toUpperCase())}</div>
+          ${store.subtitle ? `<div class="hsub">${esc(store.subtitle)}</div>` : ''}
         </div>
       </div>
-      <div class="contact">
-        <div class="phone-ic">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1l-2.2 2.2Z"/>
-          </svg>
-        </div>
-        <div>Contact:<br/>+91 ${SHOP_WHATSAPP}</div>
-      </div>
+      ${contactHTML}
     </div>
 
     <div class="info">
@@ -765,7 +810,7 @@ export default function Billing() {
       </div>
     </div>
 
-    <div class="footer">Thank you for choosing Narayan Hospital!</div>
+    <div class="footer">Thank you for choosing ${esc(storeName)}!</div>
   </div>
 
   <script>
@@ -821,7 +866,7 @@ export default function Billing() {
       return
     }
 
-    if (waWindow) waWindow.location.href = whatsappUrl(bill)
+    if (waWindow) waWindow.location.href = whatsappUrl(bill, store)
   }
 
   /* ================= SAVE ONLY ================= */
@@ -1200,7 +1245,8 @@ export default function Billing() {
           </div>
 
           <p className="mt-2 text-[10px] text-slate-400 text-center">
-            WhatsApp opens for the customer's number. Keep WhatsApp Web logged in with +91 {SHOP_WHATSAPP}, then press Send.
+            WhatsApp opens for the customer's number.
+            {shopPhone ? ` Keep WhatsApp Web logged in with +91 ${shopPhone}, then press Send.` : ' Keep WhatsApp Web logged in, then press Send.'}
           </p>
         </div>
 

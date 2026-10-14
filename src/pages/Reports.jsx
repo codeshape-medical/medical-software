@@ -1,6 +1,6 @@
 
 import * as api from '../services/api'
-
+import useStoreSettings from '../hooks/useStoreSettings'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 
 
-const WHATSAPP_NUMBER = '919250048457'
+
 
 const REPORTS = [
   { key: 'today-sales', label: "Today's Sales", icon: Receipt },
@@ -559,6 +559,27 @@ function formatReportMoney(value) {
 }
 
 export default function Reports() {
+  const store = useStoreSettings()
+
+const STORE_NAME =
+  store?.hospitalName ||
+  store?.storeName ||
+  store?.name ||
+  'Narayan Hospital'
+
+const STORE_PHONE = String(
+  store?.whatsappNumber ||
+  store?.whatsapp ||
+  store?.phoneNumber ||
+  store?.phone ||
+  ''
+).replace(/\D/g, '')
+
+const STORE_ADDRESS =
+  store?.address ||
+  store?.storeAddress ||
+  store?.hospitalAddress ||
+  ''
   const [tab, setTab] = useState(REPORTS[0].key)
   const [from, setFrom] = useState(DEFAULT_FROM)
   const [to, setTo] = useState(DEFAULT_TO)
@@ -1064,7 +1085,10 @@ function displayValue(key, value) {
 
       doc.setFontSize(18)
       doc.setFont('helvetica', 'bold')
-      doc.text('Narayan Hospital', 105, 15, { align: 'center' })
+      doc.text(STORE_NAME, 105, 15, {
+  align: 'center',
+})
+
 
       doc.setFontSize(12)
       doc.text(report.label, 105, 23, { align: 'center' })
@@ -1127,7 +1151,7 @@ function displayValue(key, value) {
       })
 
       const message = [
-        '*Narayan Hospital*',
+        `*${STORE_NAME}*`,,
         '*DAILY ACTIVITY REPORT*',
         `Date: ${dateLabel}`,
         '',
@@ -1155,10 +1179,10 @@ function displayValue(key, value) {
             })
           : ['No payment summary available.']),
         '',
-        '_Report generated from Narayan Hospital Reports._',
+        `_Report generated from ${STORE_NAME} Reports._`,,
       ].join('\n')
 
-      const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+      const whatsappUrl = `https://wa.me/${STORE_PHONE}?text=${encodeURIComponent(
         message
       )}`
 
