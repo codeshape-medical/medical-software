@@ -471,13 +471,13 @@ export default function Billing() {
 
   /* ================= PRINT BILL (A5 LANDSCAPE) + WHATSAPP ================= */
 
-   /* ================= PRINT BILL (A5 LANDSCAPE) + WHATSAPP ================= */
+   /* ================= PRINT BILL (A4 PORTRAIT, HALF PAGE) + WHATSAPP ================= */
 
   async function printBill() {
     if (!validateBill()) return
 
     // Open both windows immediately on click so the browser does not block them
-    const printWindow = window.open('', '_blank', 'width=900,height=650')
+    const printWindow = window.open('', '_blank', 'width=900,height=700')
     const waWindow = window.open('', '_blank')
 
     if (!printWindow) {
@@ -510,10 +510,16 @@ export default function Billing() {
       .join('')
 
     const hasDiscount = bill.discountAmount > 0
+    const hasTax = Number(bill.tax) > 0
 
     // Discount + Reason rows are printed ONLY when a discount exists
     const discountRows = hasDiscount
       ? `<div class="trow"><b>Discount</b><i>:</i><span>(₹${bill.discountAmount.toFixed(2)})</span></div>`
+      : ''
+
+    // Tax row is printed ONLY when tax is applied
+    const taxRow = hasTax
+      ? `<div class="trow"><b>Tax</b><i>:</i><span>₹${Number(bill.tax).toFixed(2)}</span></div>`
       : ''
 
     const reasonRow =
@@ -533,7 +539,8 @@ export default function Billing() {
   <style>
     * { box-sizing: border-box; }
 
-    @page { size: A5 landscape; margin: 5mm; }
+    /* A4 vertical page - the bill uses only the TOP HALF */
+    @page { size: A4 portrait; margin: 5mm; }
 
     :root {
       --blue: #0b3b8c;
@@ -553,10 +560,11 @@ export default function Billing() {
       print-color-adjust: exact;
     }
 
-    /* A5 landscape = 210 x 148 mm, minus 5mm margin on each side */
+    /* A4 portrait = 210 x 297 mm. Half page = 210 x 148.5 mm.
+       Minus 5mm margins -> 200mm wide, 140mm tall (top half of the page) */
     .receipt {
       width: 200mm;
-      height: 137mm;
+      height: 140mm;
       display: flex;
       flex-direction: column;
       gap: 2.2mm;
@@ -664,11 +672,11 @@ export default function Billing() {
       background: #dce9fa;
       border-radius: 2.5mm;
       text-align: center;
-      padding: 2.5mm 2mm;
+      padding: 2mm 2mm;
       color: var(--dark);
     }
-    .grand .gl { font-size: 14px; font-weight: 700; color: var(--blue); }
-    .grand .gv { font-size: 34px; font-weight: 800; line-height: 1.1; }
+    .grand .gl { font-size: 12px; font-weight: 600; color: var(--blue); }
+    .grand .gv { font-size: 22px; font-weight: 700; line-height: 1.2; }
 
     /* ---------- footer ---------- */
     .footer {
@@ -748,7 +756,7 @@ export default function Billing() {
       <div class="tleft">
         <div class="trow"><b>Subtotal</b><i>:</i><span>₹${bill.subtotal.toFixed(2)}</span></div>
         ${discountRows}
-        <div class="trow"><b>Tax</b><i>:</i><span>₹0.00</span></div>
+        ${taxRow}
         ${reasonRow}
       </div>
       <div class="grand">
